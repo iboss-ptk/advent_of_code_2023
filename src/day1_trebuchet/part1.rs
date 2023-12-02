@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub fn extract_calibration_value(input: &str) -> u32 {
     let digits: Vec<u32> = input.chars().filter_map(|c| c.to_digit(10)).collect();
 

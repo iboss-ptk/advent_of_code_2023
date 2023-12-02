@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
+#[allow(dead_code)]
 pub fn extract_calibration_value(input: &str) -> u32 {
-    let digits: Vec<u32> = input.chars().filter_map(|c| c.to_digit(10)).collect();
+    let mut digits: Vec<u32> = vec![];
 
     digits.first().unwrap() * 10 + digits.last().unwrap()
 }
@@ -10,10 +13,13 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case("1abc2", 12)]
-    #[case("pqr3stu8vwx", 38)]
-    #[case("a1b2c3d4e5f", 15)]
-    #[case("treb7uchet", 77)]
+    #[case("two1nine", 29)]
+    #[case("eightwothree", 83)]
+    #[case("abcone2threexyz", 13)]
+    #[case("xtwone3four", 24)]
+    #[case("4nineeightseven2", 42)]
+    #[case("zoneight234", 14)]
+    #[case("7pqrstsixteen", 76)]
 
     fn test_extract_calibration_value(#[case] input: &str, #[case] expected: u32) {
         assert_eq!(extract_calibration_value(input), expected);
