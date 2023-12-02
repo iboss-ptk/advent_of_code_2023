@@ -30,6 +30,12 @@ struct SuffixTree {
 }
 
 impl SuffixTree {
+    fn empty() -> Self {
+        Self {
+            subtree: HashMap::new(),
+        }
+    }
+
     fn new(input: &str) -> Self {
         let mut tree = SuffixTree {
             subtree: HashMap::new(),
@@ -104,20 +110,28 @@ impl SuffixTree {
     }
 }
 
+#[macro_export]
+macro_rules! suffix_tree {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut tree = SuffixTree::empty();
+            $(
+                tree.insert($x);
+            )*
+            tree
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_suffix_tree() {
-        let mut tree = SuffixTree::new("");
-        tree.insert("a");
-        tree.insert("b");
-        tree.insert("any");
-        tree.insert("anus");
+        let tree = suffix_tree!["a", "b", "any", "anus"];
 
         // checks if the tree contains the given string
-
         assert!(tree.contains("a"));
         assert!(tree.contains("b"));
         assert!(tree.contains("any"));
