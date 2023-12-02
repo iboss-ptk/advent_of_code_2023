@@ -24,6 +24,6 @@ mod tests {
     fn solve_part1() {
         let input = include_str!("input.txt");
         let calibration_value = input.lines().map(extract_calibration_value).sum::<u32>();
-        println!("Calibration value: {}", calibration_value);
+        assert_eq!(calibration_value, 53386)
     }
 }
