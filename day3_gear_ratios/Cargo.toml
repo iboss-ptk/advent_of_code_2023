@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name = "day3_gear_ratios"
+version = "0.1.0"
+
+[dependencies]
+nom.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
