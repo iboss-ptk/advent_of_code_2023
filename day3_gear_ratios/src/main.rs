@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use nom::{
     bytes::complete::tag,
@@ -36,11 +36,17 @@ impl Value {
 
 type SchematicIndex = (usize, (usize, usize));
 #[derive(Debug)]
-struct Schematic(BTreeMap<SchematicIndex, Value>);
+struct Schematic {
+    map: BTreeMap<SchematicIndex, Value>,
+    max_row: usize,
+}
 
 impl Schematic {
     fn empty() -> Self {
-        Self(BTreeMap::new())
+        Self {
+            map: BTreeMap::new(),
+            max_row: 0,
+        }
     }
 
     fn new(input: &str) -> Self {
@@ -52,12 +58,14 @@ impl Schematic {
     }
 
     fn insert(&mut self, row: usize, span: (usize, usize), value: Value) {
-        self.0.insert((row, span), value);
+        self.map.insert((row, span), value);
     }
 
     fn insert_row(&mut self, row: usize, input: &str) {
         let mut cursor = 0;
         let mut input = input;
+
+        self.max_row = self.max_row.max(row);
 
         while !input.is_empty() {
             if let Ok((rem, dist)) = periods_count(input) {
@@ -82,19 +90,19 @@ impl Schematic {
     }
 
     fn row_iter(&self, row: usize) -> impl Iterator<Item = (&(usize, (usize, usize)), &Value)> {
-        self.0.range((row, (0, 0))..(row + 1, (0, 0))).into_iter()
+        self.map.range((row, (0, 0))..(row + 1, (0, 0))).into_iter()
     }
 
     fn any_symbol_in_span(&self, row: usize, (start, end): (usize, usize)) -> bool {
         let first_pos = (start, start + 1);
         let last_pos = (end - 1, end);
-        self.0
+        self.map
             .range((row, first_pos)..=(row, last_pos))
             .any(|(_, v)| v.is_symbol())
     }
 
     fn get_number(&self, idx: SchematicIndex) -> Option<u64> {
-        let v = self.0.get(&idx)?;
+        let v = self.map.get(&idx)?;
         match v {
             Value::Num(n) => Some(*n),
             _ => None,
@@ -123,14 +131,9 @@ impl Schematic {
     }
 
     fn sum_eligible_numbers(&self) -> u64 {
-        self.0
-            .keys()
-            .map(|(row, _)| row)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .fold(0, |acc, row| {
-                acc + self.eligible_numbers_by_row(*row).iter().sum::<u64>()
-            })
+        (0..=self.max_row).into_iter().fold(0, |acc, row| {
+            acc + self.eligible_numbers_by_row(row).iter().sum::<u64>()
+        })
     }
 }
 fn main() {
@@ -163,7 +166,7 @@ mod tests {
     ) {
         let mut schematic = Schematic::empty();
         schematic.insert_row(row, input);
-        assert_eq!(schematic.0.into_iter().collect::<Vec<_>>(), expected);
+        assert_eq!(schematic.map.into_iter().collect::<Vec<_>>(), expected);
     }
 
     #[rstest]
@@ -188,3 +191,8 @@ mod tests {
         assert_eq!(schematic.sum_eligible_numbers(), 4361);
     }
 }
+
+// TODO:
+// - find gears
+// - find surrouding numbers
+// - if exactly 2 -> Some(n1 * n2) else None
