@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
 use nom::{
+    branch::alt,
     bytes::complete::tag,
     character::complete::{none_of, u64},
+    combinator::value,
     multi::many0,
     IResult,
 };
@@ -18,19 +20,52 @@ fn periods_count(input: &str) -> IResult<&str, usize> {
 }
 
 fn symbol(input: &str) -> IResult<&str, Value> {
-    let (rem, _) = none_of("0123456789.")(input)?;
-    Ok((rem, Value::Symbol))
+    alt((
+        value(Value::gear_symbol(), tag("*")),
+        value(Value::non_gear_symbol(), none_of("0123456789.*")),
+    ))(input)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum SymbolType {
+    Gear,
+    NonGear,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Value {
     Num(u64),
-    Symbol,
+    Symbol(SymbolType),
 }
 
 impl Value {
     fn is_symbol(&self) -> bool {
-        self == &Value::Symbol
+        match self {
+            Value::Symbol(_) => true,
+            _ => false,
+        }
+    }
+
+    fn is_gear(&self) -> bool {
+        match self {
+            Value::Symbol(SymbolType::Gear) => true,
+            _ => false,
+        }
+    }
+
+    fn gear_symbol() -> Self {
+        Value::Symbol(SymbolType::Gear)
+    }
+
+    fn non_gear_symbol() -> Self {
+        Value::Symbol(SymbolType::NonGear)
+    }
+
+    fn get_num(&self) -> Option<u64> {
+        match self {
+            Value::Num(n) => Some(*n),
+            _ => None,
+        }
     }
 }
 
@@ -39,6 +74,7 @@ type SchematicIndex = (usize, (usize, usize));
 struct Schematic {
     map: BTreeMap<SchematicIndex, Value>,
     max_row: usize,
+    gear_indices: Vec<SchematicIndex>,
 }
 
 impl Schematic {
@@ -46,6 +82,7 @@ impl Schematic {
         Self {
             map: BTreeMap::new(),
             max_row: 0,
+            gear_indices: Vec::new(),
         }
     }
 
@@ -82,7 +119,14 @@ impl Schematic {
 
             if let Ok((rem, s)) = symbol(input) {
                 let dist = input.len() - rem.len();
+
+                // index gear symbols
+                if s.is_gear() {
+                    self.gear_indices.push((row, (cursor, cursor + dist)));
+                }
+
                 self.insert(row, (cursor, cursor + dist), s);
+
                 cursor += dist;
                 input = rem;
             }
@@ -101,12 +145,45 @@ impl Schematic {
             .any(|(_, v)| v.is_symbol())
     }
 
-    fn get_number(&self, idx: SchematicIndex) -> Option<u64> {
+    fn nums_around(&self, idx: SchematicIndex) -> Vec<u64> {
+        let (row, (gear_pos, _)) = idx;
+
+        (row.saturating_sub(1)..=row.saturating_add(1))
+            .flat_map(|row| {
+                self.map
+                    .range((row, (0, gear_pos))..=(row, (gear_pos + 1, usize::MAX)))
+                    .filter_map(|((_, (num_start, num_end)), v)| {
+                        let is_num_before_gear = num_start < &gear_pos && num_end >= &gear_pos;
+                        let is_num_from_gear =
+                            num_start >= &gear_pos && num_start <= &(gear_pos + 1);
+
+                        if is_num_before_gear || is_num_from_gear {
+                            v.get_num()
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect()
+    }
+
+    fn gear_ratio(&self) -> u64 {
+        self.gear_indices
+            .iter()
+            .filter_map(|idx| {
+                let nums = self.nums_around(*idx);
+                if nums.len() == 2 {
+                    Some(nums[0] * nums[1])
+                } else {
+                    None
+                }
+            })
+            .sum()
+    }
+
+    fn get_num(&self, idx: SchematicIndex) -> Option<u64> {
         let v = self.map.get(&idx)?;
-        match v {
-            Value::Num(n) => Some(*n),
-            _ => None,
-        }
+        v.get_num()
     }
 
     fn get_eligible_number(&self, idx: SchematicIndex) -> Option<u64> {
@@ -118,7 +195,7 @@ impl Schematic {
         });
 
         if is_adjecent_to_symbol {
-            self.get_number(idx)
+            self.get_num(idx)
         } else {
             None
         }
@@ -140,6 +217,7 @@ fn main() {
     let schematic = Schematic::new(include_str!("input.txt"));
 
     println!("part 1: {}", schematic.sum_eligible_numbers());
+    println!("part 2: {}", schematic.gear_ratio());
 }
 
 #[cfg(test)]
@@ -150,14 +228,14 @@ mod tests {
 
     #[rstest]
     #[case("467..114..", 0, vec![((0, (0, 3)), Value::Num(467)), ((0, (5, 8)), Value::Num(114))])]
-    #[case("...*......", 1, vec![((1, (3, 4)), Value::Symbol)])]
+    #[case("...*......", 1, vec![((1, (3, 4)), Value::gear_symbol())])]
     #[case("..35..633.", 2, vec![((2, (2, 4)), Value::Num(35)), ((2, (6, 9)), Value::Num(633))])]
-    #[case("......#...", 3, vec![((3, (6, 7)), Value::Symbol)])]
-    #[case("617*......", 4, vec![((4, (0, 3)), Value::Num(617)), ((4, (3, 4)), Value::Symbol)])]
-    #[case(".....+.58.", 5, vec![((5, (5, 6)), Value::Symbol), ((5, (7, 9)), Value::Num(58))])]
+    #[case("......#...", 3, vec![((3, (6, 7)), Value::non_gear_symbol())])]
+    #[case("617*......", 4, vec![((4, (0, 3)), Value::Num(617)), ((4, (3, 4)), Value::gear_symbol())])]
+    #[case(".....+.58.", 5, vec![((5, (5, 6)), Value::non_gear_symbol()), ((5, (7, 9)), Value::Num(58))])]
     #[case("..592.....", 6, vec![((6, (2, 5)), Value::Num(592))])]
     #[case("......755.", 7, vec![((7, (6, 9)), Value::Num(755))])]
-    #[case("...$.*....", 8, vec![((8, (3, 4)), Value::Symbol), ((8, (5, 6)), Value::Symbol)])]
+    #[case("...$.*....", 8, vec![((8, (3, 4)), Value::non_gear_symbol()), ((8, (5, 6)), Value::gear_symbol())])]
     #[case(".664.598.." , 9, vec![((9, (1, 4)), Value::Num(664)), ((9, (5, 8)), Value::Num(598))])]
     fn test_insert_rows(
         #[case] input: &str,
@@ -190,9 +268,28 @@ mod tests {
         let schematic = Schematic::new(include_str!("example.txt"));
         assert_eq!(schematic.sum_eligible_numbers(), 4361);
     }
-}
 
-// TODO:
-// - find gears
-// - find surrouding numbers
-// - if exactly 2 -> Some(n1 * n2) else None
+    #[test]
+    fn test_gears_indices() {
+        let schematic = Schematic::new(include_str!("example.txt"));
+        assert_eq!(
+            schematic.gear_indices,
+            vec![(1, (3, 4)), (4, (3, 4)), (8, (5, 6)),]
+        );
+    }
+
+    #[rstest]
+    #[case((1, (3, 4)), vec![467, 35])]
+    #[case((4, (3, 4)), vec![617])]
+    #[case((8, (5, 6)), vec![755, 598])]
+    fn test_nums_around(#[case] idx: SchematicIndex, #[case] expected: Vec<u64>) {
+        let schematic = Schematic::new(include_str!("example.txt"));
+        assert_eq!(schematic.nums_around(idx), expected);
+    }
+
+    #[test]
+    fn test_gear_ratio() {
+        let schematic = Schematic::new(include_str!("example.txt"));
+        assert_eq!(schematic.gear_ratio(), 467835);
+    }
+}
