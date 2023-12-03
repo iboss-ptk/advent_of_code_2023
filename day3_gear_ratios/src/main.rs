@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use nom::{
     bytes::complete::tag,
@@ -28,8 +28,15 @@ enum Value {
     Symbol,
 }
 
+impl Value {
+    fn is_symbol(&self) -> bool {
+        self == &Value::Symbol
+    }
+}
+
+type SchematicIndex = (usize, (usize, usize));
 #[derive(Debug)]
-struct Schematic(BTreeMap<(usize, (usize, usize)), Value>);
+struct Schematic(BTreeMap<SchematicIndex, Value>);
 
 impl Schematic {
     fn empty() -> Self {
@@ -78,48 +85,58 @@ impl Schematic {
         self.0.range((row, (0, 0))..(row + 1, (0, 0))).into_iter()
     }
 
-    fn row_nums(&self, row: usize) -> impl Iterator<Item = ((usize, usize), u64)> + '_ {
-        self.row_iter(row).filter_map(|((_, span), v)| match v {
-            Value::Num(n) => Some((*span, *n)),
-            _ => None,
-        })
+    fn any_symbol_in_span(&self, row: usize, (start, end): (usize, usize)) -> bool {
+        let first_pos = (start, start + 1);
+        let last_pos = (end - 1, end);
+        self.0
+            .range((row, first_pos)..=(row, last_pos))
+            .any(|(_, v)| v.is_symbol())
     }
 
-    fn row_symbols_pos(&self, row: usize) -> impl Iterator<Item = usize> + '_ {
-        self.row_iter(row).filter_map(|((_, (pos, _)), v)| match v {
-            Value::Symbol => Some(*pos),
+    fn get_number(&self, idx: SchematicIndex) -> Option<u64> {
+        let v = self.0.get(&idx)?;
+        match v {
+            Value::Num(n) => Some(*n),
             _ => None,
-        })
+        }
+    }
+
+    fn get_eligible_number(&self, idx: SchematicIndex) -> Option<u64> {
+        let (row, (start, end)) = idx;
+
+        let mut rows = row.saturating_sub(1)..=row.saturating_add(1);
+        let is_adjecent_to_symbol = rows.any(|row| {
+            self.any_symbol_in_span(row, (start.saturating_sub(1), end.saturating_add(1)))
+        });
+
+        if is_adjecent_to_symbol {
+            self.get_number(idx)
+        } else {
+            None
+        }
     }
 
     fn eligible_numbers_by_row(&self, row: usize) -> Vec<u64> {
-        let surrounding_row_symbols = if row >= 1 {
-            self.row_symbols_pos(row - 1)
-                .chain(self.row_symbols_pos(row + 1))
-                .collect::<Vec<_>>()
-        } else {
-            self.row_symbols_pos(row + 1).collect::<Vec<_>>()
-        };
-
-        self.row_nums(row)
-            .filter(|((start, end), _)| {
-                surrounding_row_symbols
-                    .iter()
-                    .all(|symbol_pos| symbol_pos >= &start.saturating_sub(1) && symbol_pos <= &end)
-            })
-            .map(|(_, n)| n)
+        self.row_iter(row)
+            .filter_map(|(idx, _)| self.get_eligible_number(*idx))
             .collect()
+    }
+
+    fn sum_eligible_numbers(&self) -> u64 {
+        self.0
+            .keys()
+            .map(|(row, _)| row)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .fold(0, |acc, row| {
+                acc + self.eligible_numbers_by_row(*row).iter().sum::<u64>()
+            })
     }
 }
 fn main() {
-    let mut schematic = Schematic::empty();
+    let schematic = Schematic::new(include_str!("input.txt"));
 
-    let input = include_str!("example.txt");
-    input.lines().enumerate().for_each(|(row, line)| {
-        schematic.insert_row(row, line);
-    });
-
-    dbg!(schematic);
+    println!("part 1: {}", schematic.sum_eligible_numbers());
 }
 
 #[cfg(test)]
@@ -151,8 +168,23 @@ mod tests {
 
     #[rstest]
     #[case(0 ,vec![467])]
+    #[case(1 ,vec![])]
+    #[case(2 ,vec![35, 633])]
+    #[case(3 ,vec![])]
+    #[case(4 ,vec![617])]
+    #[case(5 ,vec![])]
+    #[case(6 ,vec![592])]
+    #[case(7 ,vec![755])]
+    #[case(8 ,vec![])]
+    #[case(9 ,vec![664, 598])]
     fn test_symbol_adjecent_number_for_row(#[case] row: usize, #[case] expected: Vec<u64>) {
         let schematic = Schematic::new(include_str!("example.txt"));
         assert_eq!(schematic.eligible_numbers_by_row(row), expected);
+    }
+
+    #[test]
+    fn test_sum_eligible_numbers() {
+        let schematic = Schematic::new(include_str!("example.txt"));
+        assert_eq!(schematic.sum_eligible_numbers(), 4361);
     }
 }
