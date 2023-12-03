@@ -148,22 +148,20 @@ impl Schematic {
     fn nums_around(&self, idx: SchematicIndex) -> Vec<u64> {
         let (row, (gear_pos, _)) = idx;
 
-        (row.saturating_sub(1)..=row.saturating_add(1))
-            .flat_map(|row| {
-                self.map
-                    .range((row, (0, gear_pos))..=(row, (gear_pos + 1, usize::MAX)))
-                    .filter_map(|((_, (num_start, num_end)), v)| {
-                        let is_num_before_gear = num_start < &gear_pos && num_end >= &gear_pos;
-                        let is_num_from_gear =
-                            num_start >= &gear_pos && num_start <= &(gear_pos + 1);
+        let adjacent_nums_to_gear = |row: usize| {
+            self.map
+                .range((row, (0, gear_pos))..=(row, (gear_pos + 1, usize::MAX)))
+                .filter_map(|((_, (num_start, num_end)), v)| {
+                    let is_num_before_gear = num_start < &gear_pos && num_end >= &gear_pos;
+                    let is_num_from_gear = num_start >= &gear_pos && num_start <= &(gear_pos + 1);
+                    let is_adjecent_to_gear = is_num_before_gear || is_num_from_gear;
 
-                        if is_num_before_gear || is_num_from_gear {
-                            v.get_num()
-                        } else {
-                            None
-                        }
-                    })
-            })
+                    v.get_num().filter(|_| is_adjecent_to_gear)
+                })
+        };
+
+        with_adjecents(row)
+            .flat_map(adjacent_nums_to_gear)
             .collect()
     }
 
@@ -189,8 +187,7 @@ impl Schematic {
     fn get_eligible_number(&self, idx: SchematicIndex) -> Option<u64> {
         let (row, (start, end)) = idx;
 
-        let mut rows = row.saturating_sub(1)..=row.saturating_add(1);
-        let is_adjecent_to_symbol = rows.any(|row| {
+        let is_adjecent_to_symbol = with_adjecents(row).any(|row| {
             self.any_symbol_in_span(row, (start.saturating_sub(1), end.saturating_add(1)))
         });
 
@@ -213,6 +210,11 @@ impl Schematic {
         })
     }
 }
+
+fn with_adjecents(row: usize) -> impl Iterator<Item = usize> {
+    row.saturating_sub(1)..=row.saturating_add(1)
+}
+
 fn main() {
     let schematic = Schematic::new(include_str!("input.txt"));
 
