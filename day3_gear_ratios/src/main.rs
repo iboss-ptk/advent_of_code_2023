@@ -32,8 +32,16 @@ enum Value {
 struct Schematic(BTreeMap<(usize, (usize, usize)), Value>);
 
 impl Schematic {
-    fn new() -> Self {
+    fn empty() -> Self {
         Self(BTreeMap::new())
+    }
+
+    fn new(input: &str) -> Self {
+        let mut schematic = Self::empty();
+        input.lines().enumerate().for_each(|(row, line)| {
+            schematic.insert_row(row, line);
+        });
+        schematic
     }
 
     fn insert(&mut self, row: usize, span: (usize, usize), value: Value) {
@@ -42,13 +50,13 @@ impl Schematic {
 
     fn insert_row(&mut self, row: usize, input: &str) {
         let mut cursor = 0;
-        let mut input = input.clone();
+        let mut input = input;
 
         while !input.is_empty() {
-            let (rem, dist) = periods_count(input).unwrap();
-            cursor += dist;
-
-            input = rem;
+            if let Ok((rem, dist)) = periods_count(input) {
+                cursor += dist;
+                input = rem;
+            }
 
             if let Ok((rem, n)) = num(input) {
                 let dist = input.len() - rem.len();
@@ -65,9 +73,46 @@ impl Schematic {
             }
         }
     }
+
+    fn row_iter(&self, row: usize) -> impl Iterator<Item = (&(usize, (usize, usize)), &Value)> {
+        self.0.range((row, (0, 0))..(row + 1, (0, 0))).into_iter()
+    }
+
+    fn row_nums(&self, row: usize) -> impl Iterator<Item = ((usize, usize), u64)> + '_ {
+        self.row_iter(row).filter_map(|((_, span), v)| match v {
+            Value::Num(n) => Some((*span, *n)),
+            _ => None,
+        })
+    }
+
+    fn row_symbols_pos(&self, row: usize) -> impl Iterator<Item = usize> + '_ {
+        self.row_iter(row).filter_map(|((_, (pos, _)), v)| match v {
+            Value::Symbol => Some(*pos),
+            _ => None,
+        })
+    }
+
+    fn eligible_numbers_by_row(&self, row: usize) -> Vec<u64> {
+        let surrounding_row_symbols = if row >= 1 {
+            self.row_symbols_pos(row - 1)
+                .chain(self.row_symbols_pos(row + 1))
+                .collect::<Vec<_>>()
+        } else {
+            self.row_symbols_pos(row + 1).collect::<Vec<_>>()
+        };
+
+        self.row_nums(row)
+            .filter(|((start, end), _)| {
+                surrounding_row_symbols
+                    .iter()
+                    .all(|symbol_pos| symbol_pos >= &start.saturating_sub(1) && symbol_pos <= &end)
+            })
+            .map(|(_, n)| n)
+            .collect()
+    }
 }
 fn main() {
-    let mut schematic = Schematic::new();
+    let mut schematic = Schematic::empty();
 
     let input = include_str!("example.txt");
     input.lines().enumerate().for_each(|(row, line)| {
@@ -99,8 +144,15 @@ mod tests {
         #[case] row: usize,
         #[case] expected: Vec<((usize, (usize, usize)), Value)>,
     ) {
-        let mut schematic = Schematic::new();
+        let mut schematic = Schematic::empty();
         schematic.insert_row(row, input);
         assert_eq!(schematic.0.into_iter().collect::<Vec<_>>(), expected);
+    }
+
+    #[rstest]
+    #[case(0 ,vec![467])]
+    fn test_symbol_adjecent_number_for_row(#[case] row: usize, #[case] expected: Vec<u64>) {
+        let schematic = Schematic::new(include_str!("example.txt"));
+        assert_eq!(schematic.eligible_numbers_by_row(row), expected);
     }
 }
