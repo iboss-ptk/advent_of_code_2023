@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name = "day2_cube_conundrum"
+version = "0.1.0"
+
+[dependencies]
+nom.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

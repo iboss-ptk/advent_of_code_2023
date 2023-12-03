@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name = "day1_trebuchet"
+version = "0.1.0"
+
+[dependencies]
+nom.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

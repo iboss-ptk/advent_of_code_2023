@@ -114,7 +114,7 @@ impl ConversionTrie {
 macro_rules! conversion_trie {
     ( $( $x:expr => $y:expr ),* ) => {
         {
-            let mut tree = $crate::day1_trebuchet::conversion_trie::ConversionTrie::empty();
+            let mut tree = $crate::conversion_trie::ConversionTrie::empty();
             $(
                 tree.insert($x, $y);
             )*
