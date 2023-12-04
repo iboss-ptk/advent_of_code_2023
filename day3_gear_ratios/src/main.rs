@@ -147,7 +147,7 @@ impl Schematic {
             .any(|(_, v)| v.is_symbol())
     }
 
-    fn nums_intersect_box_around(&self, idx: SchematicIndex) -> Vec<u64> {
+    fn nums_intersecting_bordered_box(&self, idx: SchematicIndex) -> Vec<u64> {
         let (row, (kernel_start, kernel_end)) = idx;
 
         let intersection_by_row = |row: usize| {
@@ -172,7 +172,7 @@ impl Schematic {
         self.gear_indices
             .iter()
             .filter_map(|idx| {
-                let nums = self.nums_intersect_box_around(*idx);
+                let nums = self.nums_intersecting_bordered_box(*idx);
                 if nums.len() == 2 {
                     Some(nums[0] * nums[1])
                 } else {
@@ -292,7 +292,7 @@ mod tests {
     #[case((8, (5, 6)), vec![755, 598])]
     fn test_nums_around(#[case] idx: SchematicIndex, #[case] expected: Vec<u64>) {
         let schematic = Schematic::new(include_str!("example.txt"));
-        assert_eq!(schematic.nums_intersect_box_around(idx), expected);
+        assert_eq!(schematic.nums_intersecting_bordered_box(idx), expected);
     }
 
     #[test]
