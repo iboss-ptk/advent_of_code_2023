@@ -72,7 +72,7 @@ impl Value {
 type SchematicIndex = (usize, (usize, usize));
 #[derive(Debug)]
 struct Schematic {
-    map: BTreeMap<SchematicIndex, Value>,
+    value_map: BTreeMap<SchematicIndex, Value>,
     max_row: usize,
     gear_indices: Vec<SchematicIndex>,
 }
@@ -80,7 +80,7 @@ struct Schematic {
 impl Schematic {
     fn empty() -> Self {
         Self {
-            map: BTreeMap::new(),
+            value_map: BTreeMap::new(),
             max_row: 0,
             gear_indices: Vec::new(),
         }
@@ -95,7 +95,7 @@ impl Schematic {
     }
 
     fn insert(&mut self, row: usize, span: (usize, usize), value: Value) {
-        self.map.insert((row, span), value);
+        self.value_map.insert((row, span), value);
     }
 
     fn insert_row(&mut self, row: usize, input: &str) {
@@ -134,42 +134,45 @@ impl Schematic {
     }
 
     fn row_iter(&self, row: usize) -> impl Iterator<Item = (&(usize, (usize, usize)), &Value)> {
-        self.map.range((row, (0, 0))..(row + 1, (0, 0))).into_iter()
+        self.value_map
+            .range((row, (0, 0))..(row + 1, (0, 0)))
+            .into_iter()
     }
 
     fn any_symbol_in_span(&self, row: usize, (start, end): (usize, usize)) -> bool {
         let first_pos = (start, start + 1);
         let last_pos = (end - 1, end);
-        self.map
+        self.value_map
             .range((row, first_pos)..=(row, last_pos))
             .any(|(_, v)| v.is_symbol())
     }
 
-    fn nums_around(&self, idx: SchematicIndex) -> Vec<u64> {
-        let (row, (gear_pos, _)) = idx;
+    fn nums_intersect_box_around(&self, idx: SchematicIndex) -> Vec<u64> {
+        let (row, (kernel_start, kernel_end)) = idx;
 
-        let adjacent_nums_to_gear = |row: usize| {
-            self.map
-                .range((row, (0, gear_pos))..=(row, (gear_pos + 1, usize::MAX)))
+        let intersection_by_row = |row: usize| {
+            let span_to_kernel_start = (row, (0, kernel_start));
+            let span_from_kernel_end = (row, (kernel_end, usize::MAX));
+
+            self.value_map
+                .range(span_to_kernel_start..=span_from_kernel_end)
                 .filter_map(|((_, (num_start, num_end)), v)| {
-                    let is_num_before_gear = num_start < &gear_pos && num_end >= &gear_pos;
-                    let is_num_from_gear = num_start >= &gear_pos && num_start <= &(gear_pos + 1);
-                    let is_adjecent_to_gear = is_num_before_gear || is_num_from_gear;
+                    let span_to_kernel = num_start < &kernel_start && num_end >= &kernel_start;
+                    let span_from_kernel = num_start >= &kernel_start && num_start <= &kernel_end;
+                    let intersecting = span_to_kernel || span_from_kernel;
 
-                    v.get_num().filter(|_| is_adjecent_to_gear)
+                    v.get_num().filter(|_| intersecting)
                 })
         };
 
-        with_adjecents(row)
-            .flat_map(adjacent_nums_to_gear)
-            .collect()
+        with_adjecents(row).flat_map(intersection_by_row).collect()
     }
 
     fn gear_ratio(&self) -> u64 {
         self.gear_indices
             .iter()
             .filter_map(|idx| {
-                let nums = self.nums_around(*idx);
+                let nums = self.nums_intersect_box_around(*idx);
                 if nums.len() == 2 {
                     Some(nums[0] * nums[1])
                 } else {
@@ -180,7 +183,7 @@ impl Schematic {
     }
 
     fn get_num(&self, idx: SchematicIndex) -> Option<u64> {
-        let v = self.map.get(&idx)?;
+        let v = self.value_map.get(&idx)?;
         v.get_num()
     }
 
@@ -246,7 +249,10 @@ mod tests {
     ) {
         let mut schematic = Schematic::empty();
         schematic.insert_row(row, input);
-        assert_eq!(schematic.map.into_iter().collect::<Vec<_>>(), expected);
+        assert_eq!(
+            schematic.value_map.into_iter().collect::<Vec<_>>(),
+            expected
+        );
     }
 
     #[rstest]
@@ -286,7 +292,7 @@ mod tests {
     #[case((8, (5, 6)), vec![755, 598])]
     fn test_nums_around(#[case] idx: SchematicIndex, #[case] expected: Vec<u64>) {
         let schematic = Schematic::new(include_str!("example.txt"));
-        assert_eq!(schematic.nums_around(idx), expected);
+        assert_eq!(schematic.nums_intersect_box_around(idx), expected);
     }
 
     #[test]
