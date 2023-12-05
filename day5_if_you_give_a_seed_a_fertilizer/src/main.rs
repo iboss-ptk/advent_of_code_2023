@@ -1,4 +1,5 @@
 use btree_range_map::RangeMap;
+use indicatif::ParallelProgressIterator;
 use nom::{
     bytes::complete::tag,
     character::complete::{line_ending, space1, u64},
@@ -6,6 +7,7 @@ use nom::{
     sequence::{preceded, terminated, tuple},
     IResult, Parser,
 };
+use rayon::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Mapper {
@@ -76,14 +78,37 @@ fn main() {
         mappings.0, mappings.1, mappings.2, mappings.3, mappings.4, mappings.5, mappings.6,
     ];
 
-    let lowest_location = seeds
-        .into_iter()
+    println!("Part 1: {:?}", find_lowest_location(&seeds, &mappings));
+
+    // NOTE: Compute intensive solution, could be optimized further
+    println!(
+        "Part 2: {:?}",
+        find_lowest_location(&seeds_from_range_pairs(seeds), &mappings)
+    );
+}
+
+fn find_lowest_location(seeds: &[u64], mappings: &[RangeMap<u64, Mapper>]) -> Option<u64> {
+    seeds
+        .into_par_iter()
+        .progress()
         .map(|seed| {
+            let seed = *seed;
             mappings.iter().fold(seed, |src, mapping| {
                 mapping.get(src).map(|m| m.translate(src)).unwrap_or(src)
             })
         })
-        .min();
+        .min()
+}
 
-    println!("Part 1: Lowest location number: {:?}", lowest_location);
+fn seeds_from_range_pairs(seeds: Vec<u64>) -> Vec<u64> {
+    seeds
+        .into_par_iter()
+        .chunks(2)
+        .progress()
+        .flat_map(|chunk| {
+            let start = chunk[0];
+            let len = chunk[1];
+            start..start + len
+        })
+        .collect::<Vec<_>>()
 }
