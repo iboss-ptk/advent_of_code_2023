@@ -23,7 +23,7 @@ mod parser {
     fn nums_set(input: &str) -> IResult<&str, HashSet<u64>> {
         fold_many1(
             preceded(space0, u64),
-            || HashSet::new(),
+            HashSet::new,
             |mut set: HashSet<u64>, num| {
                 set.insert(num);
                 set

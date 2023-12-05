@@ -40,17 +40,11 @@ enum Value {
 
 impl Value {
     fn is_symbol(&self) -> bool {
-        match self {
-            Value::Symbol(_) => true,
-            _ => false,
-        }
+        matches!(self, Value::Symbol(_))
     }
 
     fn is_gear(&self) -> bool {
-        match self {
-            Value::Symbol(SymbolType::Gear) => true,
-            _ => false,
-        }
+        matches!(self, Value::Symbol(SymbolType::Gear))
     }
 
     fn gear_symbol() -> Self {
@@ -134,9 +128,7 @@ impl Schematic {
     }
 
     fn row_iter(&self, row: usize) -> impl Iterator<Item = (&(usize, (usize, usize)), &Value)> {
-        self.value_map
-            .range((row, (0, 0))..(row + 1, (0, 0)))
-            .into_iter()
+        self.value_map.range((row, (0, 0))..(row + 1, (0, 0)))
     }
 
     fn any_symbol_in_span(&self, row: usize, (start, end): (usize, usize)) -> bool {
@@ -208,7 +200,7 @@ impl Schematic {
     }
 
     fn sum_eligible_numbers(&self) -> u64 {
-        (0..=self.max_row).into_iter().fold(0, |acc, row| {
+        (0..=self.max_row).fold(0, |acc, row| {
             acc + self.eligible_numbers_by_row(row).iter().sum::<u64>()
         })
     }
@@ -231,6 +223,8 @@ mod tests {
 
     use super::*;
 
+    type IndexedValue = Vec<((usize, (usize, usize)), Value)>;
+
     #[rstest]
     #[case("467..114..", 0, vec![((0, (0, 3)), Value::Num(467)), ((0, (5, 8)), Value::Num(114))])]
     #[case("...*......", 1, vec![((1, (3, 4)), Value::gear_symbol())])]
@@ -242,11 +236,7 @@ mod tests {
     #[case("......755.", 7, vec![((7, (6, 9)), Value::Num(755))])]
     #[case("...$.*....", 8, vec![((8, (3, 4)), Value::non_gear_symbol()), ((8, (5, 6)), Value::gear_symbol())])]
     #[case(".664.598.." , 9, vec![((9, (1, 4)), Value::Num(664)), ((9, (5, 8)), Value::Num(598))])]
-    fn test_insert_rows(
-        #[case] input: &str,
-        #[case] row: usize,
-        #[case] expected: Vec<((usize, (usize, usize)), Value)>,
-    ) {
+    fn test_insert_rows(#[case] input: &str, #[case] row: usize, #[case] expected: IndexedValue) {
         let mut schematic = Schematic::empty();
         schematic.insert_row(row, input);
         assert_eq!(
