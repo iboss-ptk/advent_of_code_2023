@@ -59,8 +59,21 @@ fn mapping<'a>(label: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, RangeM
 
 fn main() {
     let input = include_str!("input.txt");
+    let (_, (seeds, mappings)) = parse(input).unwrap();
 
-    let (_, (seeds, mappings)) = tuple((
+    println!("Part 1: {:?}", find_lowest_location(&seeds, &mappings));
+
+    // NOTE: Compute intensive solution, could be optimized further
+    println!(
+        "Part 2: {:?}",
+        find_lowest_location(&seeds_from_range_pairs(seeds), &mappings)
+    );
+}
+
+type Args = (Vec<u64>, Vec<RangeMap<u64, Mapper>>);
+
+fn parse(input: &str) -> IResult<&str, Args> {
+    let (rem, (seeds, mappings)) = tuple((
         seeds,
         tuple((
             mapping("seed-to-soil"),
@@ -78,13 +91,7 @@ fn main() {
         mappings.0, mappings.1, mappings.2, mappings.3, mappings.4, mappings.5, mappings.6,
     ];
 
-    println!("Part 1: {:?}", find_lowest_location(&seeds, &mappings));
-
-    // NOTE: Compute intensive solution, could be optimized further
-    println!(
-        "Part 2: {:?}",
-        find_lowest_location(&seeds_from_range_pairs(seeds), &mappings)
-    );
+    Ok((rem, (seeds, mappings)))
 }
 
 fn find_lowest_location(seeds: &[u64], mappings: &[RangeMap<u64, Mapper>]) -> Option<u64> {
@@ -111,4 +118,27 @@ fn seeds_from_range_pairs(seeds: Vec<u64>) -> Vec<u64> {
             start..start + len
         })
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_part1() {
+        let input = include_str!("example.txt");
+        let (_, (seeds, mappings)) = parse(input).unwrap();
+        dbg!(&mappings);
+        assert_eq!(find_lowest_location(&seeds, &mappings), Some(35));
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = include_str!("example.txt");
+        let (_, (seeds, mappings)) = parse(input).unwrap();
+        assert_eq!(
+            find_lowest_location(&seeds_from_range_pairs(seeds), &mappings),
+            Some(46)
+        );
+    }
 }
