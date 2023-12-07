@@ -1,0 +1,14 @@
+[package]
+edition = "2021"
+name = "day6_wait_for_it"
+version = "0.1.0"
+
+[dependencies]
+btree-range-map = "0.7.2"
+indicatif = {version = "0.17.7", features = ["rayon"]}
+itertools = "0.12.0"
+nom.workspace = true
+rayon = "1.8.0"
+
+[dev-dependencies]
+rstest.workspace = true
